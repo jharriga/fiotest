@@ -1,7 +1,9 @@
 #!/bin/bash
 
 LOGFILE=HOLD.log
-RUNTIME="15"
+#FILENAME="/mnt/usb/fioscratch"
+FILENAME="/tmp/fioscratch" 
+RUNTIME="30"
 BLOCKsize_arr=(4K 64K 512K)
 SIZE="100M"
 # List of dependencies - verfied by 'chk_dependencies' function
@@ -20,12 +22,15 @@ lat_rw_write=""
 
 select_bw_rw() 
 {
-    file=$1
-    # unit:KB/S
+  file=$1
+  bw_read=`grep "bw=" "$file" | grep read | \
+    awk -F[=,s]+ '{printf("%s%s", $4, "s")}'`
 #    bw_read=`grep "bw=" "$file" | grep read | awk -F[=,B]+ '{if(match($4, /[0-9]+K$/)) {printf("%d", substr($4, 0, length($4)-1));} else {printf("%d", int($4)/1024)}}'`
-    bw_read=`grep "bw=" "$file" | grep read | awk -F[=,B]+ '{printf("%d", $4)}'`
+#
+  bw_write=`grep "bw=" "$file" | grep write | \
+    awk -F[=,s]+ '{printf("%s%s", $4, "s")}'`
 #    bw_write=`grep "bw=" "$file" | grep write | awk -F[=,B]+ '{if(match($4, /[0-9]+K$/)) {printf("%d", substr($4, 0, length($4)-1));} else {printf("%d", int($4)/1024)}}'`
-    bw_write=`grep "bw=" "$file" | grep write | awk -F[=,B]+ '{printf("%d", $4)}'`
+
     bw_rw_read="$bw_read"
     bw_rw_write="$bw_write"
 }
@@ -59,11 +64,11 @@ print_results()
   select_iops_rw $fioout
   select_lat_rw $fioout
 
-  echo -n "> READ: [bw] ${bw_rw_read} KB/s"| tee -a $LOGFILE
-  echo -n "  -  [iops] ${iops_rw_read}" | tee -a $LOGFILE
-  echo    "  -  [lat] ${lat_rw_read} ms" | tee -a $LOGFILE
-  echo -n "> WRITE: [bw] ${bw_rw_write} KB/s" | tee -a $LOGFILE
-  echo -n "  -  [iops] ${iops_rw_write}" | tee -a $LOGFILE
+  echo -n "> READ: [bw] ${bw_rw_read}"    | tee -a $LOGFILE
+  echo -n "  -  [iops] ${iops_rw_read}"   | tee -a $LOGFILE
+  echo    "  -  [lat] ${lat_rw_read} ms"  | tee -a $LOGFILE
+  echo -n "> WRITE: [bw] ${bw_rw_write}"  | tee -a $LOGFILE
+  echo -n "  -  [iops] ${iops_rw_write}"  | tee -a $LOGFILE
   echo    "  -  [lat] ${lat_rw_write} ms" | tee -a $LOGFILE
 
 }
@@ -108,7 +113,7 @@ for bs in "${BLOCKsize_arr[@]}"; do
     rm -f $output
   fi
   fio --output="${output}" --rw=randrw --rwmixread=80 --bs="${bs}" \
-    --time_based --runtime="${RUNTIME}" --filename=/tmp/fioscratch \
+    --time_based --runtime="${RUNTIME}" --filename="${FILENAME}" \
     --size="${SIZE}" --name=test >> $LOGFILE
   if [ ! -e $output ]; then
     echo "ERROR on fio run. Aborting"
