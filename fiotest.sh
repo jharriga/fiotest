@@ -5,7 +5,8 @@ LOGFILE=HOLD.log
 FILENAME="/tmp/fioscratch" 
 RUNTIME="30"
 BLOCKsize_arr=(4K 64K 512K)
-SIZE="100M"
+#SIZE="100M"
+SIZE="1G"
 # List of dependencies - verfied by 'chk_dependencies' function
 DEPENDENCIES_arr=(
   "fio"               # I/O workload genarator
@@ -13,6 +14,7 @@ DEPENDENCIES_arr=(
 )
 
 # GLOBALS used for FIO summary print functions
+runtime_rw=""
 bw_rw_read=""
 iops_rw_read=""
 lat_rw_read=""
@@ -20,7 +22,14 @@ bw_rw_write=""
 iops_rw_write=""
 lat_rw_write=""
 
-select_bw_rw() 
+function fio_runt_rw()
+{
+    file=$1
+    runt_read=`grep "runt=" "$file" | grep read | awk -F[=,]+ '{print $8}'`
+    runtime_rw="$runt_read"
+}
+
+function fio_bw_rw() 
 {
   file=$1
   bw_read=`grep "bw=" "$file" | grep read | \
@@ -35,7 +44,7 @@ select_bw_rw()
     bw_rw_write="$bw_write"
 }
 
-select_iops_rw() 
+function fio_iops_rw() 
 {
     file=$1
     iops_read=`grep "iops=" "$file" | grep read | awk -F[=,]+ '{print $6}'`
@@ -44,7 +53,7 @@ select_iops_rw()
     iops_rw_write="$iops_write"
 }
 
-select_lat_rw() 
+function fio_lat_rw() 
 {
     file=$1
     # unit:ms
@@ -57,13 +66,15 @@ select_lat_rw()
     lat_rw_write="$lat_write"
 }
 
-print_results()
+function fio_results()
 {
   fioout=$1
-  select_bw_rw $fioout
-  select_iops_rw $fioout
-  select_lat_rw $fioout
+  fio_runt_rw $fioout
+  fio_bw_rw $fioout
+  fio_iops_rw $fioout
+  fio_lat_rw $fioout
 
+  echo "> RUNTIME: [runt] ${runtime_rw}"  | tee -a $LOGFILE
   echo -n "> READ: [bw] ${bw_rw_read}"    | tee -a $LOGFILE
   echo -n "  -  [iops] ${iops_rw_read}"   | tee -a $LOGFILE
   echo    "  -  [lat] ${lat_rw_read} ms"  | tee -a $LOGFILE
@@ -107,20 +118,20 @@ echo "Timestamp: $(date)" | tee -a $LOGFILE
 
 for bs in "${BLOCKsize_arr[@]}"; do
   echo "---------------------" | tee -a $LOGFILE
-  echo "Running with bs of ${bs}" | tee -a $LOGFILE
+  echo "Running with bs of ${bs} on ${FILENAME}" | tee -a $LOGFILE
   output="fio_${bs}.out"
   if [ -e $output ]; then
     rm -f $output
   fi
   fio --output="${output}" --rw=randrw --rwmixread=80 --bs="${bs}" \
-    --time_based --runtime="${RUNTIME}" --filename="${FILENAME}" \
-    --size="${SIZE}" --name=test >> $LOGFILE
+    --filename="${FILENAME}" --size="${SIZE}" --name=test >> $LOGFILE
+#    --time_based --runtime="${RUNTIME}" \
   if [ ! -e $output ]; then
     echo "ERROR on fio run. Aborting"
     exit 1
   fi
-  echo "SUMMARY ${SIZE}" | tee -a $LOGFILE
-  print_results $output
+  echo "SUMMARY: size = ${SIZE} blocksize = ${bs}" | tee -a $LOGFILE
+  fio_results $output
   echo "FIO output ${SIZE}" >> $LOGFILE
   cat ${output} >> $LOGFILE
   echo "---------------------" | tee -a $LOGFILE
